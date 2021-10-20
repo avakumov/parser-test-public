@@ -57,8 +57,8 @@ class DOCXParser {
                 // Определяем подтип шаблона
                 switch (this.resultData.subtype) {
                     case 'Изображение или фото':
+                        // Выбираем данные для шаблона
                         this._getStaticImagesData();
-                        console.log(this.resultData);
 
                         break;
                     default:
@@ -69,6 +69,8 @@ class DOCXParser {
             default:
                 break;
         }
+
+        return this.resultData;
     }
 
     // Парсим DOM
@@ -200,18 +202,17 @@ class DOCXParser {
         return resultText;
     }
 
-    // Методы для получения данных из шаблона "08. Статический видеоряд :: Изображение или фото"
+    // Метод для получения данных из шаблона "08. Статический видеоряд :: Изображение или фото"
     _getStaticImagesData() {
-        console.log(this.resultData);
-        console.log(this.parsedData);
-
         // Сначала фильтруем таблицы, после чего уже обрабатываем только их
         this.resultData.tables = this.parsedData.filter((node) => {
             return node.type === 'table';
         }).map((table, i) => {
+            let tableData;
+
             // Для 1-й таблицы - особый механизм выбора данных
             if (i === 0) {
-                const tableData = {
+                tableData = {
                     title: table.rows[0].cells[0].content[0].text,
                     taskType: '',
                     taskStatement: table.rows[2].cells[1].content[0].text
@@ -229,19 +230,45 @@ class DOCXParser {
                         tableData.taskType = taskType;
                     }
                 });
+            }
 
-                return {
-                    id: i,
-                    data: tableData
+            // 2-я таблица
+            if (i === 1) {
+                tableData = {
+                    rows: []
+                };
+
+                table.rows.forEach((row, i) => {
+                    if (i === 0) return;
+
+                    tableData.rows.push({
+                        number: row.cells[0].content[0].text ? row.cells[0].content[0].text : '',
+                        title: row.cells[1].content[0].text ? row.cells[1].content[0].text : '',
+                        annotation: row.cells[2].content[0].text ? row.cells[2].content[0].text : '',
+                        description: row.cells[3].content[0].text ? row.cells[3].content[0].text : '',
+                        text: row.cells[4].content.map((content) => {
+                            return content.text ? content.text : '';
+                        })
+                    });
+                });
+            }
+
+            // 3-я таблица
+            if (i === 2) {
+                tableData = {
+                    teacherRecom: table.rows[1].cells[0].content.map((content) => {
+                        return content.text ? content.text : '';
+                    }),
+                    studentRecom: table.rows[1].cells[1].content.map((content) => {
+                        return content.text ? content.text : '';
+                    })
                 };
             }
 
-            // const resultTable = [];
-
-            // // Идем по строкам
-            // table.rows.forEach((row) => {
-
-            // });
+            return {
+                id: i,
+                data: tableData
+            };
         });
     }
 }
@@ -261,7 +288,9 @@ const init = function() {
         await parserObject.parseDOCX();
 
         // Получаем необходимые данные из запарсенного документа
-        parserObject.getData();
+        const data = parserObject.getData();
+
+        console.log(data);
     });
 }
 
