@@ -35,7 +35,20 @@ class DOCXParser {
 
         this.XMLDocument = XMLDocument;
 
-        const documentContent = this._parseDOM();
+        // Парсим DOM и фильтруем необходимые узлы
+        this.parsedData = this._parseDOM().filter((node, i) => {
+            if (node) {
+                if (node.type === 'paragraph' && i > 1) {
+                    return false;
+                } else {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+        });
+
+        console.log(this.parsedData)
     }
 
     getData() {
@@ -46,14 +59,13 @@ class DOCXParser {
     _parseDOM() {
         // Массив с контентом документа
         const documentContent = Array.from(this.XMLDocument.querySelector('document').querySelector('body').childNodes);
-        console.log(documentContent);
 
         // Проходимся по узлам контента документа и выбираем то, что необходимо
-        const newResult = documentContent.map((node) => {
+        const parsedData = documentContent.map((node) => {
             return this._parseNodeContent(node);
         });
 
-        console.log(newResult);
+        return parsedData;
     }
 
     // Парсим контент отдельного узла из DOM
@@ -104,9 +116,11 @@ class DOCXParser {
                     };
                 });
 
+                const resultText = this._concatStrings(parsedRows);
+
                 return {
                     type: 'paragraph',
-                    rows: parsedRows
+                    text: resultText
                 };
             // Если узел - таблица
             case 'tbl':
@@ -125,7 +139,7 @@ class DOCXParser {
                     // Проходимся по ячейкам одной строки
                     const parsedTableCells = rowCells.map((cell) => {
                         // Проходимся по контенту одной ячейки
-                        return Array.from(cell.childNodes).filter((node) => {
+                        const cellNodes = Array.from(cell.childNodes).filter((node) => {
                             return (
                                 node.nodeName.slice(2) === 'p' ||
                                 node.nodeName.slice(2) === 'tbl'
@@ -133,6 +147,11 @@ class DOCXParser {
                         }).map((node) => {
                             return this._parseNodeContent(node);
                         });
+
+                        return {
+                            type: 'tableCell',
+                            content: cellNodes
+                        };
                     });
 
                     return {
@@ -148,6 +167,20 @@ class DOCXParser {
             default:
                 break;
         }
+    }
+
+    _concatStrings(rows) {
+        if (!rows.length) return;
+
+        const resultText = rows.map((row) => {
+            return row.content.map((content) => {
+                if (content.type === 'text') {
+                    return content.content;
+                }
+            }).join('');
+        }).join('');
+
+        return resultText;
     }
 }
 
