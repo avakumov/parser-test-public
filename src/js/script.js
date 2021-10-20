@@ -47,12 +47,28 @@ class DOCXParser {
                 return false;
             }
         });
-
-        console.log(this.parsedData)
     }
 
+    // Получаем данные из запарсенного документа
     getData() {
+        // Определяем тип шаблона
+        switch (this.resultData.type) {
+            case '08. Статический видеоряд':
+                // Определяем подтип шаблона
+                switch (this.resultData.subtype) {
+                    case 'Изображение или фото':
+                        this._getStaticImagesData();
+                        console.log(this.resultData);
 
+                        break;
+                    default:
+                        break;
+                }
+
+                break;
+            default:
+                break;
+        }
     }
 
     // Парсим DOM
@@ -169,6 +185,7 @@ class DOCXParser {
         }
     }
 
+    // Метод для объединения разорванных строк с текстом в одну
     _concatStrings(rows) {
         if (!rows.length) return;
 
@@ -181,6 +198,51 @@ class DOCXParser {
         }).join('');
 
         return resultText;
+    }
+
+    // Методы для получения данных из шаблона "08. Статический видеоряд :: Изображение или фото"
+    _getStaticImagesData() {
+        console.log(this.resultData);
+        console.log(this.parsedData);
+
+        // Сначала фильтруем таблицы, после чего уже обрабатываем только их
+        this.resultData.tables = this.parsedData.filter((node) => {
+            return node.type === 'table';
+        }).map((table, i) => {
+            // Для 1-й таблицы - особый механизм выбора данных
+            if (i === 0) {
+                const tableData = {
+                    title: table.rows[0].cells[0].content[0].text,
+                    taskType: '',
+                    taskStatement: table.rows[2].cells[1].content[0].text
+                };
+
+                // Считываем тип задания
+                table.rows[1].cells.forEach((cell) => {
+                    const taskType = cell.content[0].text.trim();
+
+                    if (
+                        (taskType.charCodeAt(0) >= 1040 && taskType.charCodeAt(0) <= 1103) ||
+                        taskType.charCodeAt(0) === 1025 ||
+                        taskType.charCodeAt(0) === 1105
+                    ) {
+                        tableData.taskType = taskType;
+                    }
+                });
+
+                return {
+                    id: i,
+                    data: tableData
+                };
+            }
+
+            // const resultTable = [];
+
+            // // Идем по строкам
+            // table.rows.forEach((row) => {
+
+            // });
+        });
     }
 }
 
@@ -197,6 +259,9 @@ const init = function() {
 
         // Парсим выбранный файл
         await parserObject.parseDOCX();
+
+        // Получаем необходимые данные из запарсенного документа
+        parserObject.getData();
     });
 }
 
