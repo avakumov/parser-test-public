@@ -35,18 +35,15 @@ class DOCXParser {
 
         this.XMLDocument = XMLDocument;
 
-        // Парсим DOM и фильтруем необходимые узлы
-        this.parsedData = this._parseDOM().filter((node, i) => {
-            if (node) {
-                if (node.type === 'paragraph' && i > 1) {
-                    return false;
-                } else {
-                    return true;
-                }
-            } else {
-                return false;
-            }
-        });
+        // Парсим DOM
+        const parsedData = this._parseDOM();
+
+        // Фильтруем данные на всех уровнях вложенности (2 раза, т.к. после 1-й фильтрации
+        // некоторые параграфы удаляются в последнюю очередь, и массивы становятся пустыми)
+        this.filteredParsedData = this._filterData(parsedData, true);
+        this.filteredParsedData = this._filterData(this.filteredParsedData, true);
+
+        console.log(this.filteredParsedData);
     }
 
     // Получаем данные из запарсенного документа
@@ -71,6 +68,38 @@ class DOCXParser {
         }
 
         return this.resultData;
+    }
+
+    // Фильтруем данные на уровнях вложенности ниже 1-го
+    _filterData(data, onTopLevel = false) {
+        return data.filter((node) => {
+            if (node) {
+                switch (node.type) {
+                    case 'paragraph':
+                        if (onTopLevel ? (!node.text || i > 1) : (!node.text)) return false;
+    
+                        return true;
+                    case 'tableCell':
+                        if (!node.content.length) return false;
+    
+                        node.content = this._filterData(node.content);
+    
+                        return true;
+                    case 'tableRow':
+                        node.cells = this._filterData(node.cells);
+    
+                        return true;
+                    case 'table':
+                        node.rows = this._filterData(node.rows);
+    
+                        return true;
+                    default:
+                        return true;
+                }
+            } else {
+                return false;
+            }
+        });
     }
 
     // Парсим DOM
@@ -205,7 +234,7 @@ class DOCXParser {
     // Метод для получения данных из шаблона "08. Статический видеоряд :: Изображение или фото"
     _getStaticImagesData() {
         // Сначала фильтруем таблицы, после чего уже обрабатываем только их
-        this.resultData.tables = this.parsedData.filter((node) => {
+        this.resultData.tables = this.filteredData.filter((node) => {
             return node.type === 'table';
         }).map((table, i) => {
             let tableData;
