@@ -7,9 +7,9 @@ class DOCXParser {
 
         // Общая структура для всех шаблонов
         this.resultData = {
-            code: null,
-            type: null,
-            subtype: null,
+            code: '',
+            type: '',
+            subtype: '',
             tables: []
         };
     }
@@ -42,8 +42,6 @@ class DOCXParser {
         // некоторые параграфы удаляются в последнюю очередь, и массивы становятся пустыми)
         this.filteredParsedData = this._filterData(parsedData, true);
         this.filteredParsedData = this._filterData(this.filteredParsedData, true);
-
-        console.log(this.filteredParsedData);
     }
 
     // Получаем данные из запарсенного документа
@@ -70,28 +68,46 @@ class DOCXParser {
         return this.resultData;
     }
 
+    _getTypeSubtype(text) {
+        // Если считанный текст содержит код ЭОМа
+        if (text.includes('Код ЭОМа:')) {
+            this.resultData.code = text.slice(9).trim();
+        }
+
+        // Если считанный текст содержит тип и подтип
+        if (text.includes('::')) {
+            const index = text.indexOf('::');
+
+            this.resultData.type = text.slice(0, index).trim();
+            this.resultData.subtype = text.slice(index + 2).trim();
+        }
+    }
+
     // Фильтруем данные на уровнях вложенности ниже 1-го
     _filterData(data, onTopLevel = false) {
-        return data.filter((node) => {
+        return data.filter((node, i) => {
             if (node) {
                 switch (node.type) {
                     case 'paragraph':
                         if (onTopLevel ? (!node.text || i > 1) : (!node.text)) return false;
-    
+
+                        // Вытаскиваем тип и подтип шаблона из параграфа
+                        this._getTypeSubtype(node.text);
+
                         return true;
                     case 'tableCell':
                         if (!node.content.length) return false;
-    
+
                         node.content = this._filterData(node.content);
-    
+
                         return true;
                     case 'tableRow':
                         node.cells = this._filterData(node.cells);
-    
+
                         return true;
                     case 'table':
                         node.rows = this._filterData(node.rows);
-    
+
                         return true;
                     default:
                         return true;
@@ -136,19 +152,6 @@ class DOCXParser {
                         if (node.nodeName.slice(2) === 't') {
                             // Считываем текст узла
                             const nodeText = node.textContent;
-
-                            // Если считанный текст содержит код ЭОМа
-                            if (nodeText.includes('Код ЭОМа:')) {
-                                this.resultData.code = nodeText.slice(9).trim();
-                            }
-
-                            // Если считанный текст содержит тип и подтип
-                            if (nodeText.includes('::')) {
-                                const index = nodeText.indexOf('::');
-
-                                this.resultData.type = nodeText.slice(0, index).trim();
-                                this.resultData.subtype = nodeText.slice(index + 2).trim();
-                            }
 
                             return {
                                 type: 'text',
@@ -234,7 +237,7 @@ class DOCXParser {
     // Метод для получения данных из шаблона "08. Статический видеоряд :: Изображение или фото"
     _getStaticImagesData() {
         // Сначала фильтруем таблицы, после чего уже обрабатываем только их
-        this.resultData.tables = this.filteredData.filter((node) => {
+        this.resultData.tables = this.filteredParsedData.filter((node) => {
             return node.type === 'table';
         }).map((table, i) => {
             let tableData;
@@ -317,9 +320,10 @@ const init = function() {
         await parserObject.parseDOCX();
 
         // Получаем необходимые данные из запарсенного документа
-        const data = parserObject.getData();
+        // const data = parserObject.getData();
 
-        console.log(data);
+        // console.log(data);
+        console.log(parserObject.resultData);
     });
 }
 
