@@ -61,6 +61,17 @@ class DOCXParser {
                 }
 
                 break;
+            case '07. Интерактивный контент':
+                switch (this.resultData.subtype) {
+                    case '0701. Интерактивная статья (параграф учебника)':
+                        this._getInteractiveArticleData();
+
+                        break;
+                    default:
+                        break;
+                }
+
+                break;
             default:
                 break;
         }
@@ -68,6 +79,7 @@ class DOCXParser {
         return this.resultData;
     }
 
+    // Метод для получения типа и подтипа
     _getTypeSubtype(text) {
         // Если считанный текст содержит код ЭОМа
         if (text.includes('Код ЭОМа:')) {
@@ -96,8 +108,6 @@ class DOCXParser {
 
                         return true;
                     case 'tableCell':
-                        if (!node.content.length) return false;
-
                         node.content = this._filterData(node.content);
 
                         return true;
@@ -242,26 +252,9 @@ class DOCXParser {
         }).map((table, i) => {
             let tableData;
 
-            // Для 1-й таблицы - особый механизм выбора данных
+            // 1-я таблица
             if (i === 0) {
-                tableData = {
-                    title: table.rows[0].cells[0].content[0].text,
-                    taskType: '',
-                    taskStatement: table.rows[2].cells[1].content[0].text
-                };
-
-                // Считываем тип задания
-                table.rows[1].cells.forEach((cell) => {
-                    const taskType = cell.content[0].text.trim();
-
-                    if (
-                        (taskType.charCodeAt(0) >= 1040 && taskType.charCodeAt(0) <= 1103) ||
-                        taskType.charCodeAt(0) === 1025 ||
-                        taskType.charCodeAt(0) === 1105
-                    ) {
-                        tableData.taskType = taskType;
-                    }
-                });
+                tableData = this._getFirstTableData(table);
             }
 
             // 2-я таблица
@@ -274,12 +267,12 @@ class DOCXParser {
                     if (i === 0) return;
 
                     tableData.rows.push({
-                        number: row.cells[0].content[0].text ? row.cells[0].content[0].text : '',
-                        title: row.cells[1].content[0].text ? row.cells[1].content[0].text : '',
-                        annotation: row.cells[2].content[0].text ? row.cells[2].content[0].text : '',
-                        description: row.cells[3].content[0].text ? row.cells[3].content[0].text : '',
+                        number: row.cells[0].content[0] ? row.cells[0].content[0].text : '',
+                        title: row.cells[1].content[0] ? row.cells[1].content[0].text : '',
+                        annotation: row.cells[2].content[0] ? row.cells[2].content[0].text : '',
+                        description: row.cells[3].content[0] ? row.cells[3].content[0].text : '',
                         text: row.cells[4].content.map((content) => {
-                            return content.text ? content.text : '';
+                            return content ? content.text : '';
                         })
                     });
                 });
@@ -287,14 +280,7 @@ class DOCXParser {
 
             // 3-я таблица
             if (i === 2) {
-                tableData = {
-                    teacherRecom: table.rows[1].cells[0].content.map((content) => {
-                        return content.text ? content.text : '';
-                    }),
-                    studentRecom: table.rows[1].cells[1].content.map((content) => {
-                        return content.text ? content.text : '';
-                    })
-                };
+                tableData = this._getThirdTableData(table);
             }
 
             return {
@@ -302,6 +288,89 @@ class DOCXParser {
                 data: tableData
             };
         });
+    }
+
+    _getInteractiveArticleData() {
+        this.resultData.tables = this.filteredParsedData[0].rows[3].cells[0].content.map((table, i) => {
+            let tableData;
+
+            // 1-я таблица
+            if (i === 0) {
+                tableData = this._getFirstTableData(table);
+            }
+
+            // 2-я таблица
+            if (i === 1) {
+                tableData = {
+                    rows: []
+                };
+
+                table.rows.forEach((row, i) => {
+                    if (i === 0 || i === 1) return;
+
+                    tableData.rows.push({
+                        number: row.cells[0].content[0] ? row.cells[0].content[0].text : '',
+                        title: row.cells[1].content[0] ? row.cells[1].content[0].text : '',
+                        textBlock: row.cells[2].content.map((content) => {
+                            return content ? content.text : '';
+                        }),
+                        hyperlink: {
+                            text: row.cells[3].content[0] ? row.cells[3].content[0].text : '',
+                            target: row.cells[4].content[0] ? row.cells[4].content[0].text : '',
+                            description: row.cells[5].content.map((content) => {
+                                return content ? content.text : '';
+                            })
+                        }
+                    });
+                });
+            }
+
+            // 3-я таблица
+            if (i === 2) {
+                tableData = this._getThirdTableData(table);
+            }
+
+            return {
+                id: i,
+                data: tableData
+            };
+        });
+    }
+
+    // Так как во всех шаблонах 1 и 3 таблицы однотипные, код по выбору данных
+    // из них выносим в отдельный метод
+    _getFirstTableData(table) {
+        // Считываем тип задания
+        let selectedTaskType = '';
+
+        table.rows[1].cells.forEach((cell) => {
+            let taskType = cell.content[0].text.trim();
+
+            if (
+                (taskType.charCodeAt(0) >= 1040 && taskType.charCodeAt(0) <= 1103) ||
+                taskType.charCodeAt(0) === 1025 ||
+                taskType.charCodeAt(0) === 1105
+            ) {
+                selectedTaskType = taskType;
+            }
+        });
+
+        return {
+            title: table.rows[0].cells[0].content[0].text,
+            taskType: selectedTaskType,
+            taskStatement: table.rows[2].cells[1].content
+        };
+    }
+
+    _getThirdTableData(table) {
+        return {
+            teacherRecom: table.rows[1].cells[0].content.map((content) => {
+                return content ? content.text : '';
+            }),
+            studentRecom: table.rows[1].cells[1].content.map((content) => {
+                return content ? content.text : '';
+            })
+        };
     }
 }
 
@@ -320,10 +389,9 @@ const init = function() {
         await parserObject.parseDOCX();
 
         // Получаем необходимые данные из запарсенного документа
-        // const data = parserObject.getData();
+        const data = parserObject.getData();
 
-        // console.log(data);
-        console.log(parserObject.resultData);
+        console.log(data);
     });
 }
 
