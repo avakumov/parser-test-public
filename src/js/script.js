@@ -65,7 +65,9 @@ class DOCXParser {
                 switch (this.resultData.subtype) {
                     case '0701. Интерактивная статья (параграф учебника)':
                         this._getInteractiveArticleData();
-
+                        break;
+                    case '39. Динамическая инфографика :: Кроссворд':
+                        this._getInteractiveCrossword();
                         break;
                     default:
                         break;
@@ -336,6 +338,62 @@ class DOCXParser {
             };
         });
     }
+
+    _getInteractiveCrossword() {
+        console.log("this.filteredParsedData: ", this.filteredParsedData)
+		const values = [];
+        const questions = []
+		const tables = this.filteredParsedData.filter((node) => {
+			return node.type === 'table';
+		});
+
+		tables.forEach((table, i) => {
+			if (i === 0) {
+				table.rows.forEach((row, i) => {
+					if (i === 0) {
+						values.push({
+							name: 'Название ЭОМа',
+							value: row.cells[0].content[0].text ? row.cells[0].content[0].text : '',
+						});
+					}
+					if (i === 1) {
+						values.push({
+							name: 'Формулировка задания',
+							value: row.cells[1].content[0].text ? row.cells[1].content[0].text : '',
+						});
+					}
+				});
+			}
+            if (i === 1) {
+                let currentDirection = null
+                table.rows.forEach((row, i) => {
+                    if (row.cells[1]?.content[0]?.text === 'Вопросы по ГОРИЗОНТАЛИ') {
+                        currentDirection = 'horizontal'
+                    }
+                    if (row.cells[1]?.content[0]?.text === 'Вопросы по ВЕРТИКАЛИ') {
+                        currentDirection = 'vertical'
+                    }
+                    const isQuestion = Number.isInteger(parseInt(row.cells[0]?.content[0]?.text))
+                    if (currentDirection && row.cells.length === 4 && isQuestion) {
+                        questions.push({
+                            direction: currentDirection, 
+			                number: row.cells[0]?.content[0]?.text,
+			                question: row.cells[1]?.content[0]?.text,
+			                media: row.cells[2]?.content[0]?.text,
+			                answer: row.cells[3]?.content[0]?.text,
+                        })
+                    }
+                })
+
+                
+            }
+		});
+		console.log('RESULT: ', values);
+		console.log('questions: ', questions);
+        return {
+            values, questions
+        }
+	}
 
     // Так как во всех шаблонах 1 и 3 таблицы однотипные, код по выбору данных
     // из них выносим в отдельный метод
